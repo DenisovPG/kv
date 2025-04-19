@@ -1,87 +1,53 @@
 package main
 
 import (
-	"errors"
-	"io"
+	"context"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
-	"github.com/gorilla/mux"
-
-	"kv/store"
+	"kv/infrastructure/adaptors/api"
+	"kv/infrastructure/repository/storage"
+	"kv/infrastructure/repository/tx_log"
 )
 
-func helloMuxHandler(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("Hello gorilla/mux!\n"))
-}
-
-func keyValuePutHandler(storage store.Crud) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		vars := mux.Vars(r)
-		key := vars["key"]
-
-		value, err := io.ReadAll(r.Body)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		err = storage.Put(key, string(value))
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusCreated)
-	}
-}
-func keyValueGetHandler(storage store.Crud) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		vars := mux.Vars(r)
-		key := vars["key"]
-
-		value, err := storage.Get(key)
-		if errors.Is(err, store.ErrorNoSuchKey) {
-			http.Error(w, err.Error(), http.StatusNotFound)
-			return
-		}
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.Write([]byte(value + "\n"))
-	}
-}
-
-func keyValueDeleteHandler(storage store.Crud) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		vars := mux.Vars(r)
-		key := vars["key"]
-
-		err := storage.Delete(key)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	}
-}
-
 func main() {
-	mem_store := store.NewMemoryStore()
-	defer mem_store.Save()
+	mem_store := storage.NewMemoryStore(&tx_log.ConsoleTxStoreLogger{})
 
 	stop := make(chan os.Signal, 1)
+	http_err := make(chan error, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+
+	router := api.GetStoreHttpHandler(mem_store)
+	http_srv := &http.Server{
+		Addr:    ":8080",
+		Handler: router,
+	}
 	go func() {
-		r := mux.NewRouter()
-		r.HandleFunc("/", helloMuxHandler)
-		r.HandleFunc("/v1/{key}", keyValuePutHandler(mem_store)).Methods("PUT")
-		r.HandleFunc("/v1/{key}", keyValueGetHandler(mem_store)).Methods("GET")
-		r.HandleFunc("/v1/{key}", keyValueDeleteHandler(mem_store)).Methods("DELETE")
-		log.Fatal(http.ListenAndServe(":8080", r))
+		for {
+			if err := http_srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				http_err <- err
+			}
+		}
 	}()
-	<-stop
-	log.Println("Shutting down...")
+
+	select {
+	case err := <-http_err:
+		log.Printf("HTTP server error: %e", err)
+	case <-stop:
+		log.Println("Shutting down...")
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		if _, ok := mem_store.(storage.DurableCrud); ok {
+			mem_store.Save()
+		}
+
+		if err := http_srv.Shutdown(ctx); err != nil {
+			log.Printf("Shutdown error: %e", err)
+		}
+	}
 }

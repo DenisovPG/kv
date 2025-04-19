@@ -1,4 +1,4 @@
-package logger
+package tx_log
 
 import (
 	"fmt"
@@ -33,11 +33,11 @@ type Event struct {
 	Value     string
 }
 
-type TxStoreLogger struct {
+type ConsoleTxStoreLogger struct {
 	events chan Event
 }
 
-func (l *TxStoreLogger) Run() {
+func (l *ConsoleTxStoreLogger) Run() {
 	l.events = make(chan Event, 16)
 	go func() {
 		for ev := range l.events {
@@ -46,7 +46,7 @@ func (l *TxStoreLogger) Run() {
 	}()
 }
 
-func (l *TxStoreLogger) LogPut(key, value string) {
+func (l *ConsoleTxStoreLogger) LogPut(key, value string) {
 	l.events <- Event{
 		timestamp: time.Now(),
 		EventType: EventPut,
@@ -55,7 +55,7 @@ func (l *TxStoreLogger) LogPut(key, value string) {
 	}
 }
 
-func (l *TxStoreLogger) LogGet(key string) {
+func (l *ConsoleTxStoreLogger) LogGet(key string) {
 	l.events <- Event{
 		timestamp: time.Now(),
 		EventType: EventGet,
@@ -64,7 +64,7 @@ func (l *TxStoreLogger) LogGet(key string) {
 	}
 }
 
-func (l *TxStoreLogger) LogDelete(key string) {
+func (l *ConsoleTxStoreLogger) LogDelete(key string) {
 	l.events <- Event{
 		timestamp: time.Now(),
 		EventType: EventDelete,
@@ -73,6 +73,7 @@ func (l *TxStoreLogger) LogDelete(key string) {
 	}
 }
 
-func (l *TxStoreLogger) Stop() {
+func (l *ConsoleTxStoreLogger) Stop() {
 	close(l.events)
 }
+
