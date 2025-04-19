@@ -1,4 +1,4 @@
-package logger
+package tx_log
 
 type TxLogger interface {
 	LogPut(key, value string)

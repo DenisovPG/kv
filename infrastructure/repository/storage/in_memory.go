@@ -1,18 +1,19 @@
-package store
+package storage
 
 import (
 	"encoding/gob"
 	"errors"
 	"fmt"
-	"kv/logger"
 	"os"
 	"sync"
+
+	"kv/infrastructure/repository/tx_log"
 )
 
 type Store struct {
 	data map[string]string
 	sync.RWMutex
-	logger logger.TxLogger
+	logger tx_log.TxLogger
 }
 
 var ErrorNoSuchKey = errors.New("no such key")
@@ -24,6 +25,7 @@ func (s *Store) Put(key string, value string) error {
 	s.data[key] = value
 	return nil
 }
+
 func (s *Store) Get(key string) (string, error) {
 	s.RLock()
 	defer s.RUnlock()
@@ -34,6 +36,7 @@ func (s *Store) Get(key string) (string, error) {
 	}
 	return value, nil
 }
+
 func (s *Store) Delete(key string) error {
 	s.Lock()
 	defer s.Unlock()
@@ -81,10 +84,9 @@ func (s *Store) Load(filename ...string) error {
 	return nil
 }
 
-func NewMemoryStore() *Store {
-	logger := &logger.TxStoreLogger{}
-	logger.Run()
-	store := &Store{data: make(map[string]string), logger: logger}
+func NewMemoryStore(tx_logger tx_log.TxLogger) DurableOrCrud {
+	tx_logger.Run()
+	store := &Store{data: make(map[string]string), logger: tx_logger}
 	store.Load()
 	return store
 }

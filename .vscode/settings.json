@@ -1,0 +1,29 @@
+{
+  "files.autoSave": "afterDelay",
+  "go.diagnostic.vulncheck": "Imports",
+  "go.formatTool": "gofmt",
+  "go.useLanguageServer": true,
+  "[go]": {
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit"
+    }
+  },
+  "gopls": {
+    "formatting.gofumpt": true, // Опционально: стиль форматирования
+    "ui.completion.usePlaceholders": true,
+    "deepCompletion": true,
+    "completeUnimported": true,
+    
+    // Анализирует код даже в незагруженных файлах
+    "matcher": "fuzzy",
+    "symbolMatcher": "fuzzy",
+    "staticcheck": true,
+    
+    // Игнорирует vendor, если не используете его
+    "experimentalWorkspaceModule": true,
+    "build.experimentalWorkspaceModule": true
+
+  },
+  "go.autocompleteUnimportedPackages": true
+}

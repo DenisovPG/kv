@@ -1,4 +1,4 @@
-package store
+package storage
 
 type Crud interface {
 	Put(key string, value string) error
@@ -6,9 +6,15 @@ type Crud interface {
 	Delete(key string) error
 }
 
-type Durable interface {
+type DurableCrud interface {
+	Crud
 	Save(filename ...string) error
 	Load(filename ...string) error
 }
 
 
+
+type DurableOrCrud interface {
+	DurableCrud
+	Crud
+}
