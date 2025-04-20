@@ -3,9 +3,11 @@ package api
 import (
 	"errors"
 	"io"
+	"net"
 	"net/http"
 
 	"kv/domain"
+	"kv/infrastructure/adaptors/middleware"
 	"kv/infrastructure/repository/storage"
 
 	"github.com/gorilla/mux"
@@ -15,8 +17,15 @@ func helloMuxHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("Hello gorilla/mux!\n"))
 }
 
-func keyValuePutHandler(storage storage.Crud) http.HandlerFunc {
+func throttledKeyValuePutHandler(storage storage.Crud) http.HandlerFunc {
+	throttled := middleware.Throttle(1, 1)
 	return func(w http.ResponseWriter, r *http.Request) {
+		ip, _, _ := net.SplitHostPort(r.RemoteAddr)
+		if !throttled(ip) {
+			http.Error(w, "Too many requests", http.StatusTooManyRequests)
+			return
+		}
+
 		vars := mux.Vars(r)
 		key := vars["key"]
 
@@ -69,7 +78,7 @@ func keyValueDeleteHandler(storage storage.Crud) http.HandlerFunc {
 func GetStoreHttpHandler(storage storage.Crud) *mux.Router {
 	r := mux.NewRouter()
 	r.HandleFunc("/", helloMuxHandler)
-	r.HandleFunc("/v1/{key}", keyValuePutHandler(storage)).Methods("PUT")
+	r.HandleFunc("/v1/{key}", throttledKeyValuePutHandler(storage)).Methods("PUT")
 	r.HandleFunc("/v1/{key}", keyValueGetHandler(storage)).Methods("GET")
 	r.HandleFunc("/v1/{key}", keyValueDeleteHandler(storage)).Methods("DELETE")
 	return r
